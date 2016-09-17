@@ -1,0 +1,53 @@
+version: "2"
+
+services:
+  nginx:
+    image: nginx
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/etc/nginx/conf.d"
+      - "/etc/nginx/vhost.d"
+      - "/usr/share/nginx/html"
+      - "./certs:/etc/nginx/certs:ro"
+    networks:
+      - proxy-tier
+  nginx-gen:
+    build: ./nginx-gen
+    container_name: nginx-gen
+    volumes:
+      - "/var/run/docker.sock:/tmp/docker.sock:ro"
+    volumes_from:
+      - nginx
+    environment:
+          - DEBUG=true
+  letsencrypt-nginx-proxy-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: letsencrypt-nginx-proxy-companion
+    volumes_from:
+      - nginx
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/etc/nginx/certs:rw"
+    environment:
+      - NGINX_DOCKER_GEN_CONTAINER=nginx-gen
+  
+  handbook:
+    build: https://github.com/workwork/handbook.git
+    container_name: handbook
+    ports:
+        - "80"
+    environment:
+      - VIRTUAL_HOST=handbook.work-work.no
+      - VIRTUAL_NETWORK=nginx-proxy
+      - VIRTUAL_PORT=80
+      - LETSENCRYPT_HOST=handbook.work-work.no
+      - LETSENCRYPT_EMAIL=contact@work-work.no
+    networks:
+      - proxy-tier
+networks:
+  proxy-tier:
+    external:
+      name: nginx-proxy
